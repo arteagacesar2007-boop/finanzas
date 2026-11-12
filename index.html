@@ -602,8 +602,8 @@ $('#view').addEventListener('change',e=>{const k=e.target.dataset.bud;if(!k)retu
 const FIREBASE_CONFIG={"apiKey":"AIzaSyAuWUNQAi8yXrtNlvhPLLoNQzAyt5JYLwc","authDomain":"patrimonio-3a8ab.firebaseapp.com","projectId":"patrimonio-3a8ab","storageBucket":"patrimonio-3a8ab.firebasestorage.app","messagingSenderId":"1019536579086","appId":"1:1019536579086:web:83fced21b706defe49ba5f"};
 function adapter(store,uid){
   const base='users/'+uid+'/';
-  return {doc:p=>{const r=store.doc(base+p);return {set:d=>r.set(d),update:d=>r.set(d,{merge:true}),delete:()=>r.delete(),onSnapshot:(n,e)=>r.onSnapshot(n,e)}},
-          collection:p=>store.collection(base+p)};
+  return {doc:p=>{const r=store.doc(base+p);return {set:d=>r.set(d),update:d=>r.set(d,{merge:true}),delete:()=>r.delete(),onSnapshot:(n,e)=>r.onSnapshot({includeMetadataChanges:true},n,e)}},
+          collection:p=>{const c=store.collection(base+p);return {onSnapshot:(n,e)=>c.onSnapshot({includeMetadataChanges:true},n,e)}}};
 }
 function start(){
   render();

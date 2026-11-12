@@ -244,6 +244,7 @@ const nodeOpts=()=>[...accOpts(),...ent(S.inv).map(([id])=>['inv:'+id,nodeName('
 function balances(){
   const b={},tin={},tout={},ad=(o,k,v)=>{if(k)o[k]=(o[k]||0)+v};
   for(const m of movs()){
+    if(m.fecha>TODAY)continue;
     if(m.tipo==='ingreso')ad(b,m.cuenta,m.monto);
     else if(m.tipo==='gasto')ad(b,m.cuenta,-m.monto);
     else{ad(b,m.cuenta,-m.monto);ad(b,m.destino,m.monto);ad(tout,m.cuenta,m.monto);ad(tin,m.destino,m.monto)}
@@ -327,6 +328,7 @@ V.resumen=()=>{
   const pend=ent(S.fijos).filter(([id,f])=>f.activa!==false&&t(f.espacio)&&!fijoPagado(id,f)&&fijoNext(f).startsWith(NOWYM));
   const venc=ent(S.cobros).filter(([id,c])=>c.sentido!=='pagar'&&t(c.espacio)&&cobPend(id,c)>0);
   const metas=ent(S.metas).filter(([,m])=>t(m.espacio)).slice(0,3);
+  const prox=movs().filter(m=>m.fecha>TODAY&&(m.tipo==='traspaso'?UI.esp==='todo':t(m.espacio))).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(0,5);
   return `<div class="kpis">
     <div class="kpi"><h3>Ingresos</h3><span class="num pos">${M(r.ing)}</span><small>${per}</small></div>
     <div class="kpi"><h3>Gastos</h3><span class="num neg">${M(r.gas)}</span><small>Fijos ${M(r.fijo)} · variables ${M(r.vari)}</small></div>
@@ -346,10 +348,11 @@ V.resumen=()=>{
     </section>`}
     <section class="panel">${head('Pendientes')}
       <div class="rows">
+        ${prox.map(m=>`<button class="row" data-act="editMov" data-id="${m.id}"><div class="main"><b>${esc(m.tipo==='traspaso'?'Traspaso':m.categoria)}${m.nota?' · '+esc(m.nota):''}</b><small>${m.tipo==='ingreso'?'Ingreso programado':m.tipo==='gasto'?'Gasto programado':'Programado'} para el ${dLbl(m.fecha)}</small></div><span class="num amt ${m.tipo==='ingreso'?'pos':''}">${m.tipo==='ingreso'?'+':m.tipo==='gasto'?'−':''}${M(m.monto)}</span></button>`).join('')}
         ${pend.map(([,f])=>`<div class="row"><div class="main"><b>${esc(f.nombre)}</b><small>Pago fijo · vence ${dLbl(fijoNext(f))}</small></div><span class="num amt">${M(f.monto)}</span></div>`).join('')}
         ${venc.map(([id,c])=>`<div class="row"><div class="main"><b>${esc(c.persona)} te debe</b><small>${c.vence?(c.vence<TODAY?'Venció el ':'Vence el ')+dLbl(c.vence):'Sin fecha de pago'}</small></div><span class="num amt ${c.vence&&c.vence<TODAY?'neg':''}">${M(cobPend(id,c))}</span></div>`).join('')}
         ${metas.map(([,m])=>`<div class="row"><div class="main"><b>${esc(m.nombre)}</b><small>Meta · ${pct(+m.ahorrado||0,+m.objetivo||0)}% de ${M(m.objetivo)}</small></div><span class="num amt">${M(m.ahorrado)}</span></div>`).join('')}
-        ${pend.length+venc.length+metas.length?'':'<p class="empty">Nada pendiente. Aquí verás pagos fijos por hacer, dinero que te deben y el avance de tus metas.</p>'}
+        ${prox.length+pend.length+venc.length+metas.length?'':'<p class="empty">Nada pendiente. Aquí verás pagos fijos por hacer, dinero que te deben y el avance de tus metas.</p>'}
       </div>
     </section>
   </div>
@@ -481,7 +484,7 @@ function drawForm(){
 }
 sheet.addEventListener('input',e=>{const k=e.target.dataset.k;if(k&&F)F.v[k]=e.target.value});
 sheet.addEventListener('change',e=>{const k=e.target.dataset.k;if(k&&F)F.v[k]=e.target.value});
-sheet.addEventListener('submit',e=>{e.preventDefault();if(!F)return;const err=F.save(F.v);if(err){const p=$('#ferr');p.textContent=err;p.hidden=false}else{closeForm();toast('Guardado')}});
+sheet.addEventListener('submit',e=>{e.preventDefault();if(!F)return;const f=F,err=f.save(f.v);if(err){const p=$('#ferr');p.textContent=err;p.hidden=false}else{closeForm();toast(f.msg||'Guardado')}});
 ov.addEventListener('click',e=>{if(e.target===ov)closeForm()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&F)closeForm()});
 const espF={k:'espacio',l:'Espacio',t:'seg',o:Object.entries(ESP)};
@@ -509,7 +512,10 @@ function movForm(id){
       const m={tipo:v.tipo,fecha:v.fecha,monto,cuenta:v.cuenta,destino:'',espacio:'',categoria:'',clase:'',nota:(v.nota||'').trim(),fijoId:v.fijoId||'',ejemplo:false};
       if(v.tipo==='traspaso'){if(!v.destino||v.destino===v.cuenta)return 'El destino debe ser distinto del origen.';m.destino=v.destino}
       else{m.espacio=v.espacio;m.categoria=v.categoria||'Sin categoría';if(v.tipo==='gasto')m.clase=v.clase||'variable'}
-      saveMov(old?old.id:rid(),m,old?.ym)},
+      saveMov(old?old.id:rid(),m,old?.ym);
+      const ym=m.fecha.slice(0,7);
+      if(UI.modo==='mes'?ym!==UI.ym:ym.slice(0,4)!==UI.ym.slice(0,4)){UI.ym=ym;F.msg='Guardado en '+ymLbl(ym)+'. Te llevé a ese mes.';queue()}
+      else if(m.fecha>TODAY)F.msg='Guardado como programado: contará en tus saldos desde el '+dLbl(m.fecha)+'.'},
     del:old?()=>delMov(old.id,old.ym):null});
 }
 function docForm(col,id,o){
